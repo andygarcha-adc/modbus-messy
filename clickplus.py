@@ -370,14 +370,12 @@ def get_prefix(click_address : str) -> str :
         raise ValueError(f"You have a {digits}-letter prefix in '{click_address}' - the limit is 3.")
     return click_address[0:digits]
 
-def addr_translate(click_address : str, use_true_address : bool = True) -> tuple[int, ModBusType, bool] :
+def __addr_translate(click_address : str) -> tuple[int, ModBusType, bool, str] :
     """Takes in an address for a Click Plus PLC register
     and returns information about it.
 
     Args:
         click_address (str): The address of the register in the Click Plus PLC
-        use_true_address (bool): Returns the real address you have to use. ModBus is 1-addressed. It's very annoying.
-
     Returns:
         tuple(int, type, bool, optional[str]): Returns the ModBus address, the data type, and whether or not 
         you can write to it. It may also return a string at the end if there is a nickname for it.
@@ -411,10 +409,6 @@ def addr_translate(click_address : str, use_true_address : bool = True) -> tuple
     # going to do.
     # --- IGNORE ---
 
-    # ModBus is 1-addressed. Annoying!
-    if use_true_address : incrementor = addr_num - 1
-    else : incrementor = addr_num
-
     # error string, in case i ever need to change it
     error_report = f"`click_address` with prefix {addr_prefix} out of range: {click_address}"
 
@@ -434,7 +428,7 @@ def addr_translate(click_address : str, use_true_address : bool = True) -> tuple
             ]
             for start, end, base in ranges :
                 if start <= addr_num <= end :
-                    return (base + (incrementor - start)), ModBusType.Bit, False, nickname
+                    return (base + (addr_num - start)), ModBusType.Bit, False, nickname
             raise ValueError(error_report)
         
         case 'Y' :
@@ -452,23 +446,23 @@ def addr_translate(click_address : str, use_true_address : bool = True) -> tuple
             ]
             for start, end, base in ranges :
                 if start <= addr_num <= end :
-                    return (base + (incrementor - start)), ModBusType.Bit, True, nickname
+                    return (base + (addr_num - start)), ModBusType.Bit, True, nickname
             raise ValueError(error_report)
         
         case 'C' :
             if addr_num < 1 or addr_num > 2000 :
                 raise ValueError(error_report)
-            return (16385 + (incrementor - 1)), ModBusType.Bit, True, nickname
+            return (16385 + (addr_num - 1)), ModBusType.Bit, True, nickname
         
         case 'T' :
             if addr_num < 1 or addr_num > 500 :
                 raise ValueError(error_report)
-            return (145057 + (incrementor - 1)), ModBusType.Bit, False, nickname
+            return (145057 + (addr_num - 1)), ModBusType.Bit, False, nickname
         
         case 'CT' :
             if addr_num < 1 or addr_num > 250 :
                 raise ValueError(error_report)
-            return (149153 + (incrementor - 1)), ModBusType.Bit, False, nickname
+            return (149153 + (addr_num - 1)), ModBusType.Bit, False, nickname
         
         case 'SC' :
             ranges = [
@@ -495,53 +489,53 @@ def addr_translate(click_address : str, use_true_address : bool = True) -> tuple
             writable = False
             for start, end, base in ranges :
                 if start <= addr_num <= end :
-                    return (base + (incrementor - start)), ModBusType.Bit, writable, nickname
+                    return (base + (addr_num - start)), ModBusType.Bit, writable, nickname
                 writable = not writable
             raise ValueError(error_report)
         
         case 'DS' :
             if addr_num < 1 or addr_num > 4500 :
                 raise ValueError(error_report)
-            return (400001 + (incrementor - 1)), ModBusType.Integer, True, nickname
+            return (400001 + (addr_num - 1)), ModBusType.Integer, True, nickname
         
         case 'DD' :
             if addr_num < 1 or addr_num > 1000 :
                 raise ValueError(error_report)
-            return (416385 + (incrementor - 1) * 2), ModBusType.Integer, True, nickname
+            return (416385 + (addr_num - 1) * 2), ModBusType.Integer, True, nickname
         
         case 'DH' :
             if addr_num < 1 or addr_num > 500 :
                 raise ValueError(error_report)
-            return (424577 + (incrementor - 1)), ModBusType.Hexadecimal, True, nickname
+            return (424577 + (addr_num - 1)), ModBusType.Hexadecimal, True, nickname
         
         case 'DF' :
             if addr_num < 1 or addr_num > 500 :
                 raise ValueError(error_report)
-            return (428673 + (incrementor - 1) * 2), ModBusType.FloatingPoint, True, nickname
+            return (428673 + (addr_num - 1) * 2), ModBusType.FloatingPoint, True, nickname
         
         case 'XD' :
             if addr_num < -1 or addr_num > 8 :
                 raise ValueError(error_report)
-            if addr_num == -1 : return 357346 - use_true_address, ModBusType.Hexadecimal, False, nickname # weird rule with XD0u
-            if addr_num == 0 : return 357345 - use_true_address, ModBusType.Hexadecimal, False, nickname
-            return (357347 + (incrementor - 1) * 2), ModBusType.Hexadecimal, False, nickname
+            if addr_num == -1 : return 357346, ModBusType.Hexadecimal, False, nickname # weird rule with XD0u
+            if addr_num == 0 : return 357345, ModBusType.Hexadecimal, False, nickname
+            return (357347 + (addr_num - 1) * 2), ModBusType.Hexadecimal, False, nickname
 
         case 'YD' :
             if addr_num < -1 or addr_num > 8 :
                 raise ValueError(error_report)
-            if addr_num == -1 : return 457858 - use_true_address, ModBusType.Hexadecimal, True, nickname
-            if addr_num == 0 : return 457857 - use_true_address, ModBusType.Hexadecimal, True, nickname
-            return (457859 + (incrementor - 1) * 2), ModBusType.Hexadecimal, True, nickname
+            if addr_num == -1 : return 457858, ModBusType.Hexadecimal, True, nickname
+            if addr_num == 0 : return 457857, ModBusType.Hexadecimal, True, nickname
+            return (457859 + (addr_num - 1) * 2), ModBusType.Hexadecimal, True, nickname
         
         case 'TD' :
             if addr_num < 1 or addr_num > 500 :
                 raise ValueError(error_report)
-            return (445057 + (incrementor - 1)), ModBusType.Integer, True, nickname
+            return (445057 + (addr_num - 1)), ModBusType.Integer, True, nickname
         
         case 'CTD' :
             if addr_num < 1 or addr_num > 250 :
                 raise ValueError(error_report)
-            return (449153 + (incrementor - 1) * 2), ModBusType.Integer2, True, nickname
+            return (449153 + (addr_num - 1) * 2), ModBusType.Integer2, True, nickname
         
         case 'SD' :
             switches = (
@@ -560,9 +554,9 @@ def addr_translate(click_address : str, use_true_address : bool = True) -> tuple
 
             # if we were allowed to write then leave
             if writable : 
-                return (461441 + incrementor - 1), ModBusType.Integer, True, nickname
+                return (461441 + addr_num - 1), ModBusType.Integer, True, nickname
             else :
-                return (361441 + incrementor - 1), ModBusType.Integer, False, nickname
+                return (361441 + addr_num - 1), ModBusType.Integer, False, nickname
         
         case 'TXT' :
             if addr_num < 1 or addr_num > 1000 :
@@ -571,12 +565,12 @@ def addr_translate(click_address : str, use_true_address : bool = True) -> tuple
             # the problem was we were subtracting 1 if we wanted to use the true address up
             # at the top, but when we divide that number by 2 it gets off by a half. 
             # this fixes it (i'm pretty sure...)
-            return int(436865 + (addr_num - 1) / 2) - use_true_address, ModBusType.Text, True, nickname
+            return int(436865 + (addr_num - 1) / 2), ModBusType.Text, True, nickname
         
         case _ : 
             raise ValueError(f"Invalid prefix {addr_prefix}.")
 
-def __test_addr_translate(use_lazy : bool) :
+def __test_addr_translate(use_lazy : bool = False) :
     """Tested the `addr_translate()` function based on the data extracted from the Click Plus PLC.
     """
     TEST_DEBUG = False
@@ -601,7 +595,7 @@ def __test_addr_translate(use_lazy : bool) :
             # try running the addr_translate function
             try :
                 if use_lazy : result = __addr_translate_lazy(click_address)
-                else : result, modbusType, writable, nickname = addr_translate(click_address, False)
+                else : result, modbusType, writable, nickname = __addr_translate(click_address)
 
             # if it errors, we want to know what line it failed on.
             except ValueError as e :
@@ -624,19 +618,23 @@ def __addr_translate_lazy(click_address : str) :
             if row[0] == click_address :
                 return int(row[2])
 
-"""
-print("test normal function")
-start = time.time()
-addr_translate("DH353")
-end = time.time()
-print(f"Total time taken: {end - start}")
-print("\ntest pulling csv file")
-start = time.time()
-__addr_translate_lazy("DH353")
-end = time.time()
-print(f"Total time taken: {end - start}")
-"""
+__test_addr_translate()
+
+def compare_normal_and_lazy() :
+    print("test normal function")
+    start = time.time()
+    __addr_translate("DH353")
+    end = time.time()
+    print(f"Total time taken: {end - start}")
+    print("\ntest pulling csv file")
+    start = time.time()
+    __addr_translate_lazy("DH353")
+    end = time.time()
+    print(f"Total time taken: {end - start}")
+
+
 def __get_nicknames_og() :
+
     """Retrieved the list of nicknames and their corresponding Click Plus addresses. Is now stored
     in a `dict` object called NICKNAMES.
     """
@@ -649,5 +647,9 @@ def __get_nicknames_og() :
 
         for n in nicknames :
             print(f"'{n[0]}': '{n[1]}',")
+            pass
+        pass
+    pass
 
-print(addr_translate("SD347", False))
+def get_modbus_address(click_address : str) :
+    ""
